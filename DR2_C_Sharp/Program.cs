@@ -142,11 +142,11 @@ void RunMembersMenu()
                 WaitForContinue();
                 break;
             case 2:
-                Console.WriteLine("Brisanje člana - scusi još nije dodano.");
+                DeleteMember();
                 WaitForContinue();
                 break;
             case 3:
-                Console.WriteLine("Uređivanje člana - scusi još nije dodano.");
+                EditMember();
                 WaitForContinue();
                 break;
             case 4:
@@ -343,5 +343,236 @@ DateTime ReadDate(string message)
         }
 
         Console.WriteLine("Krivi format datuma! Sredi glavu i unesi lipo kao YYYY-MM-DD (npr. 2002-05-14).");
+    }
+}
+
+void DeleteMember()
+{
+    Console.Clear();
+    Console.WriteLine("BRISANJE ČLANA\n");
+
+    if (members.Count == 0)
+    {
+        Console.WriteLine("Nema upisanih članova.");
+        return;
+    }
+
+    Console.WriteLine("1 - Brisanje po ID-u");
+    Console.WriteLine("2 - Brisanje po imenu i prezimenu");
+    Console.WriteLine("0 - Odustani\n");
+
+    int choice = ReadMenuChoice(0, 2);
+    if (choice == 0)
+    {
+        return;
+    }
+
+    int targetId = -1;
+
+    if (choice == 1)
+    {
+        PrintSimpleMembersList();
+        Console.Write("\nUnesite ID člana: ");
+        string? input = Console.ReadLine();
+
+        if (!int.TryParse(input, out int id) || !members.ContainsKey(id))
+        {
+            Console.WriteLine("Član s tim ID-om ne postoji.");
+            return;
+        }
+
+        targetId = id;
+    }
+    else if (choice == 2)
+    {
+        string firstName = ReadText("Ime: ");
+        string lastName = ReadText("Prezime: ");
+
+        List<int> foundIds = new List<int>();
+        foreach (var item in members)
+        {
+            if (item.Value.FirstName.ToLower() == firstName.ToLower() &&
+                item.Value.LastName.ToLower() == lastName.ToLower())
+            {
+                foundIds.Add(item.Key);
+            }
+        }
+
+        if (foundIds.Count == 0)
+        {
+            Console.WriteLine("Nije pronađen nijedan član s tim imenom i prezimenom.");
+            return;
+        }
+        else if (foundIds.Count == 1)
+        {
+            targetId = foundIds[0];
+        }
+        else
+        {
+            Console.WriteLine("\nPronađeno je više članova s tim imenom:");
+            foreach (int foundId in foundIds)
+            {
+                var m = members[foundId];
+                string dateText = m.BirthDate.ToString("yyyy-MM-dd");
+                Console.WriteLine($"[{foundId}] {m.FirstName} {m.LastName} ({dateText})");
+            }
+
+            Console.Write("\nUnesite ID člana kojeg želite obrisati: ");
+            string? input = Console.ReadLine();
+
+            if (!int.TryParse(input, out int id) || !foundIds.Contains(id))
+            {
+                Console.WriteLine("Neispravan ID.");
+                return;
+            }
+
+            targetId = id;
+        }
+    }
+
+    if (HasActiveLoans(targetId))
+    {
+        Console.WriteLine("\nČlan se ne može obrisati jer ima barem jednu nevraćenu knjigu!");
+        return;
+    }
+
+    var memberToDelete = members[targetId];
+    if (AskConfirmation($"\nJeste li sigurni da želite obrisati člana {memberToDelete.FirstName} {memberToDelete.LastName}? (da/ne): "))
+    {
+        members.Remove(targetId);
+        Console.WriteLine("Član je uspješno obrisan.");
+    }
+    else
+    {
+        Console.WriteLine("Brisanje je otkazano.");
+    }
+}
+
+void EditMember()
+{
+    Console.Clear();
+    Console.WriteLine("UREĐIVANJE ČLANA\n");
+
+    if (members.Count == 0)
+    {
+        Console.WriteLine("Nema upisanih članova.");
+        return;
+    }
+
+    PrintSimpleMembersList();
+    Console.Write("\nUnesite ID člana za uređivanje: ");
+    string? input = Console.ReadLine();
+
+    if (!int.TryParse(input, out int id) || !members.ContainsKey(id))
+    {
+        Console.WriteLine("Član s tim ID-om ne postoji.");
+        return;
+    }
+
+    var current = members[id];
+    Console.WriteLine("\nOstavi prazno i stisni Enter ako ne želiš mijenjati polje.\n");
+
+    Console.Write($"Ime ({current.FirstName}): ");
+    string? newFirstName = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(newFirstName))
+    {
+        newFirstName = current.FirstName;
+    }
+    else
+    {
+        newFirstName = newFirstName.Trim();
+    }
+
+    Console.Write($"Prezime ({current.LastName}): ");
+    string? newLastName = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(newLastName))
+    {
+        newLastName = current.LastName;
+    }
+    else
+    {
+        newLastName = newLastName.Trim();
+    }
+
+    DateTime newBirthDate = current.BirthDate;
+    string currentBirthText = current.BirthDate.ToString("yyyy-MM-dd");
+    while (true)
+    {
+        Console.Write($"Datum rođenja ({currentBirthText}): ");
+        string? dateInput = Console.ReadLine();
+
+        if (string.IsNullOrWhiteSpace(dateInput))
+        {
+            break;
+        }
+
+        if (dateInput.Length == 10 && dateInput[4] == '-' && dateInput[7] == '-')
+        {
+            string[] parts = dateInput.Split('-');
+            bool okYear = int.TryParse(parts[0], out int year);
+            bool okMonth = int.TryParse(parts[1], out int month);
+            bool okDay = int.TryParse(parts[2], out int day);
+
+            if (okYear && okMonth && okDay && year >= 1900 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= DateTime.DaysInMonth(year, month))
+            {
+                DateTime parsedDate = new DateTime(year, month, day);
+                if (parsedDate <= DateTime.Today)
+                {
+                    newBirthDate = parsedDate;
+                    break;
+                }
+                else
+                {
+                    Console.WriteLine("Datum rođenja ne može biti u budućnosti!");
+                    continue;
+                }
+            }
+        }
+
+        Console.WriteLine("Krivi format datuma! Unesi kao YYYY-MM-DD.");
+    }
+
+    if (AskConfirmation("\nSpremi promjene? (da/ne): "))
+    {
+        members[id] = (newFirstName, newLastName, newBirthDate, current.Loans);
+        Console.WriteLine("Podaci člana su ažurirani.");
+    }
+    else
+    {
+        Console.WriteLine("Uređivanje je otkazano.");
+    }
+}
+
+void PrintSimpleMembersList()
+{
+    Console.WriteLine("Popis članova:");
+    foreach (var item in members)
+    {
+        string dateText = item.Value.BirthDate.ToString("yyyy-MM-dd");
+        Console.WriteLine($"[{item.Key}] {item.Value.FirstName} {item.Value.LastName} ({dateText})");
+    }
+}
+
+bool AskConfirmation(string message)
+{
+    while (true)
+    {
+        Console.Write(message);
+        string? input = Console.ReadLine();
+
+        if (input != null)
+        {
+            string answer = input.Trim().ToLower();
+            if (answer == "da")
+            {
+                return true;
+            }
+            if (answer == "ne")
+            {
+                return false;
+            }
+        }
+
+        Console.WriteLine("Unesite 'da' ili 'ne'.");
     }
 }
