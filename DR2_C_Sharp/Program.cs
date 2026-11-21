@@ -31,8 +31,7 @@ void RunMainMenu()
                 RunMembersMenu();
                 break;
             case 2:
-                Console.WriteLine("Posudbe - skužajte još nije dodano.");
-                WaitForContinue();
+                RunLoansMenu ();
                 break;
             case 0:
                 Console.WriteLine("Arivederči!");
@@ -575,4 +574,169 @@ bool AskConfirmation(string message)
 
         Console.WriteLine("Unesite 'da' ili 'ne'.");
     }
+}
+void RunLoansMenu()
+{
+    while (true)
+    {
+        Console.Clear();
+        Console.WriteLine("POSUDBE\n");
+        Console.WriteLine("1 - Unos nove posudbe");
+        Console.WriteLine("2 - Vraćanje knjige");
+        Console.WriteLine("3 - Brisanje posudbe");
+        Console.WriteLine("4 - Uređivanje postojeće posudbe");
+        Console.WriteLine("5 - Pregled svih posudbi");
+        Console.WriteLine("6 - Izvještaji i analize");
+        Console.WriteLine("0 - Povratak na glavni izbornik\n");
+
+        int choice = ReadMenuChoice(0, 6);
+
+        switch (choice)
+        {
+            case 1:
+                AddLoan();
+                WaitForContinue();
+                break;
+            case 2:
+                ReturnBook();
+                WaitForContinue();
+                break;
+            case 3:
+                Console.WriteLine("Brisanje posudbe - još nije dodano.");
+                WaitForContinue();
+                break;
+            case 4:
+                Console.WriteLine("Uređivanje posudbe - još nije dodano.");
+                WaitForContinue();
+                break;
+            case 5:
+                Console.WriteLine("Pregled posudbi - još nije dodano.");
+                WaitForContinue();
+                break;
+            case 6:
+                Console.WriteLine("Izvještaji - još nije dodano.");
+                WaitForContinue();
+                break;
+            case 0:
+                return;
+        }
+    }
+}
+
+void AddLoan()
+{
+    Console.Clear();
+    Console.WriteLine("UNOS NOVE POSUDBE\n");
+
+    if (members.Count == 0)
+    {
+        Console.WriteLine("Nema upisanih članova.");
+        return;
+    }
+
+    PrintSimpleMembersList();
+    Console.Write("\nUnesite ID člana: ");
+    string? input = Console.ReadLine();
+
+    if (!int.TryParse(input, out int memberId) || !members.ContainsKey(memberId))
+    {
+        Console.WriteLine("Član s tim ID-om ne postoji.");
+        return;
+    }
+
+    string title = ReadText("Naslov knjige: ");
+    string author = ReadText("Autor knjige: ");
+
+    DateTime loanDate = ReadDate("Datum posudbe (YYYY-MM-DD): ");
+    while (loanDate > DateTime.Today)
+    {
+        Console.WriteLine("Datum posudbe ne može biti u budućnosti!");
+        loanDate = ReadDate("Datum posudbe (YYYY-MM-DD): ");
+    }
+
+    int loanId = nextLoanId;
+    nextLoanId++;
+
+    int lateDays = CalculateLateDays(loanDate, null);
+    decimal lateFee = CalculateLateFee(lateDays);
+
+    members[memberId].Loans[loanId] = (title, author, loanDate, null, lateDays, lateFee);
+
+    Console.WriteLine($"\nPosudba je uspješno dodana! ID posudbe je: {loanId}");
+}
+
+void ReturnBook()
+{
+    Console.Clear();
+    Console.WriteLine("VRAĆANJE KNJIGE\n");
+
+    bool hasActive = false;
+    Console.WriteLine("Aktivne (nevraćene) posudbe:");
+    foreach (var memberEntry in members)
+    {
+        foreach (var loanEntry in memberEntry.Value.Loans)
+        {
+            if (!IsReturned(loanEntry.Value.ReturnDate))
+            {
+                string loanDateText = loanEntry.Value.LoanDate.ToString("yyyy-MM-dd");
+                Console.WriteLine($"[{loanEntry.Key}] {loanEntry.Value.Title} - {loanEntry.Value.Author} | Član: {memberEntry.Value.FirstName} {memberEntry.Value.LastName} | Posuđeno: {loanDateText}");
+                hasActive = true;
+            }
+        }
+    }
+
+    if (!hasActive)
+    {
+        Console.WriteLine("Nema aktivnih posudbi za vraćanje.");
+        return;
+    }
+
+    Console.Write("\nUnesite ID posudbe koju želite vratiti: ");
+    string? input = Console.ReadLine();
+
+    if (!int.TryParse(input, out int targetLoanId))
+    {
+        Console.WriteLine("Neispravan ID posudbe.");
+        return;
+    }
+
+    int foundMemberId = -1;
+    foreach (var memberEntry in members)
+    {
+        if (memberEntry.Value.Loans.ContainsKey(targetLoanId))
+        {
+            foundMemberId = memberEntry.Key;
+            break;
+        }
+    }
+
+    if (foundMemberId == -1)
+    {
+        Console.WriteLine("Posudba s tim ID-om ne postoji.");
+        return;
+    }
+
+    var loan = members[foundMemberId].Loans[targetLoanId];
+    if (IsReturned(loan.ReturnDate))
+    {
+        Console.WriteLine("Ova knjiga je već vraćena.");
+        return;
+    }
+
+    DateTime returnDate = ReadDate("Datum vraćanja (YYYY-MM-DD): ");
+    while (returnDate < loan.LoanDate || returnDate > DateTime.Today)
+    {
+        Console.WriteLine("Datum vraćanja ne može biti prije datuma posudbe niti u budućnosti!");
+        returnDate = ReadDate("Datum vraćanja (YYYY-MM-DD): ");
+    }
+
+    int lateDays = CalculateLateDays(loan.LoanDate, returnDate);
+    decimal lateFee = CalculateLateFee(lateDays);
+
+    members[foundMemberId].Loans[targetLoanId] = (loan.Title, loan.Author, loan.LoanDate, returnDate, lateDays, lateFee);
+
+    string feeText = lateFee.ToString("0.00");
+    Console.WriteLine("\nKnjiga je uspješno vraćena!");
+    Console.WriteLine($"Dani kašnjenja: {lateDays}");
+    Console.WriteLine($"Zakasnina: {feeText} €");
 }
