@@ -54,7 +54,7 @@ int ReadMenuChoice(int minOption, int maxOption)
 
 void WaitForContinue()
 {
-    Console.WriteLine("\nPritisnite bilo koji botun za nastavak"); /* malo splickog štiha */
+    Console.WriteLine("\nPritisnite bilo koji botun za nastavak"); 
     Console.ReadKey(true);
 }
 
@@ -610,12 +610,10 @@ void RunLoansMenu()
                 WaitForContinue();
                 break;
             case 5:
-                Console.WriteLine("Pregled posudbi - još nije dodano.");
-                WaitForContinue();
+                ShowLoans();
                 break;
             case 6:
-                Console.WriteLine("Izvještaji - još nije dodano.");
-                WaitForContinue();
+                ShowReports();
                 break;
             case 0:
                 return;
@@ -662,7 +660,12 @@ void AddLoan()
 
     members[memberId].Loans[loanId] = (title, author, loanDate, null, lateDays, lateFee);
 
-    Console.WriteLine($"\nPosudba je uspješno dodana! ID posudbe je: {loanId}");
+    DateTime dueDate = loanDate.AddDays(LoanPeriodDays);
+    string dueDateText = dueDate.ToString("yyyy-MM-dd");
+
+    Console.WriteLine($"\nPosudba uspješno dodana! ID posudbe je: {loanId}");
+    Console.WriteLine($"Rok za vraćanje: {dueDateText}");
+
 }
 
 void ReturnBook()
@@ -773,46 +776,163 @@ void DeleteLoan()
     Console.Clear();
     Console.WriteLine("BRISANJE POSUDBE\n");
 
-    if (!PrintSimpleLoansList())
+    Console.WriteLine("1 - Brisanje po ID-u");
+    Console.WriteLine("2 - Brisanje svih vraćenih posudbi odabranog člana");
+    Console.WriteLine("3 - Brisanje svih posudbi sa zakasninom većom od unesenog iznosa");
+    Console.WriteLine("0 - Odustani\n");
+
+    int choice = ReadMenuChoice(0, 3);
+    if (choice == 0)
     {
-        Console.WriteLine("Nema nijedne posudbe, sve je prazno.");
         return;
     }
 
-    Console.Write("\nUpiši ID posudbe za brisanje: ");
-    string? input = Console.ReadLine();
-
-    if (!int.TryParse(input, out int loanId))
+    if (choice == 1)
     {
-        Console.WriteLine("Krivi ID, aj lipo broj unesi.");
-        return;
-    }
-
-    int foundMemberId = -1;
-    foreach (var memberEntry in members)
-    {
-        if (memberEntry.Value.Loans.ContainsKey(loanId))
+        if (!PrintSimpleLoansList())
         {
-            foundMemberId = memberEntry.Key;
-            break;
+            Console.WriteLine("Nema upisanih posudbi.");
+            return;
+        }
+
+        Console.Write("\nUnesite ID posudbe za brisanje: ");
+        string? input = Console.ReadLine();
+
+        if (!int.TryParse(input, out int loanId))
+        {
+            Console.WriteLine("Neispravan ID posudbe.");
+            return;
+        }
+
+        int foundMemberId = -1;
+        foreach (var memberEntry in members)
+        {
+            if (memberEntry.Value.Loans.ContainsKey(loanId))
+            {
+                foundMemberId = memberEntry.Key;
+                break;
+            }
+        }
+
+        if (foundMemberId == -1)
+        {
+            Console.WriteLine("Posudba s tim ID-om ne postoji.");
+            return;
+        }
+
+        var loan = members[foundMemberId].Loans[loanId];
+        if (AskConfirmation($"\nJeste li sigurni da želite obrisati posudbu '{loan.Title}'? (da/ne): "))
+        {
+            members[foundMemberId].Loans.Remove(loanId);
+            Console.WriteLine("Posudba je uspješno obrisana.");
+        }
+        else
+        {
+            Console.WriteLine("Brisanje je otkazano.");
         }
     }
+    else if (choice == 2)
+    {
+        if (members.Count == 0)
+        {
+            Console.WriteLine("Nema upisanih članova.");
+            return;
+        }
 
-    if (foundMemberId == -1)
-    {
-        Console.WriteLine("Nema posudbe s tim ID-om, krivo si.");
-        return;
-    }
+        PrintSimpleMembersList();
+        Console.Write("\nUnesite ID člana: ");
+        string? memberInput = Console.ReadLine();
 
-    var loan = members[foundMemberId].Loans[loanId];
-    if (AskConfirmation($"\nJesi siguran da želiš izbrisat '{loan.Title}'? (da/ne): "))
-    {
-        members[foundMemberId].Loans.Remove(loanId);
-        Console.WriteLine("Obrisano, nema je više.");
+        if (!int.TryParse(memberInput, out int memberId) || !members.ContainsKey(memberId))
+        {
+            Console.WriteLine("Član s tim ID-om ne postoji.");
+            return;
+        }
+
+        List<int> loanIdsToDelete = new List<int>();
+        foreach (var loanEntry in members[memberId].Loans)
+        {
+            if (IsReturned(loanEntry.Value.ReturnDate))
+            {
+                loanIdsToDelete.Add(loanEntry.Key);
+            }
+        }
+
+        if (loanIdsToDelete.Count == 0)
+        {
+            Console.WriteLine("Odabrani član nema vraćenih posudbi.");
+            return;
+        }
+
+        var m = members[memberId];
+        if (AskConfirmation($"\nObrisati {loanIdsToDelete.Count} vraćenih posudbi za člana {m.FirstName} {m.LastName}? (da/ne): "))
+        {
+            foreach (int idToDelete in loanIdsToDelete)
+            {
+                members[memberId].Loans.Remove(idToDelete);
+            }
+            Console.WriteLine("Vraćene posudbe su uspješno obrisane.");
+        }
+        else
+        {
+            Console.WriteLine("Brisanje je otkazano.");
+        }
     }
-    else
+    else if (choice == 3)
     {
-        Console.WriteLine("Ništa onda");
+        Console.Write("\nUnesite minimalni iznos zakasnine (€): ");
+        string? feeInput = Console.ReadLine();
+
+        bool okFee = decimal.TryParse(feeInput, out decimal minFee);
+        if (!okFee && feeInput != null)
+        {
+            okFee = decimal.TryParse(feeInput.Replace('.', ','), out minFee);
+        }
+        if (!okFee && feeInput != null)
+        {
+            okFee = decimal.TryParse(feeInput.Replace(',', '.'), out minFee);
+        }
+
+        if (!okFee || minFee < 0)
+        {
+            Console.WriteLine("Neispravan iznos zakasnine.");
+            return;
+        }
+
+        List<int> memberIdsToDelete = new List<int>();
+        List<int> loanIdsToDelete = new List<int>();
+
+        foreach (var memberEntry in members)
+        {
+            foreach (var loanEntry in memberEntry.Value.Loans)
+            {
+                if (loanEntry.Value.LateFee > minFee)
+                {
+                    memberIdsToDelete.Add(memberEntry.Key);
+                    loanIdsToDelete.Add(loanEntry.Key);
+                }
+            }
+        }
+
+        if (loanIdsToDelete.Count == 0)
+        {
+            Console.WriteLine("Nema posudbi sa zakasninom većom od unesenog iznosa.");
+            return;
+        }
+
+        string minFeeText = minFee.ToString("0.00");
+        if (AskConfirmation($"\nPronađeno je {loanIdsToDelete.Count} posudbi sa zakasninom većom od {minFeeText} €. Obrisati ih? (da/ne): "))
+        {
+            for (int i = 0; i < loanIdsToDelete.Count; i++)
+            {
+                members[memberIdsToDelete[i]].Loans.Remove(loanIdsToDelete[i]);
+            }
+            Console.WriteLine("Posudbe su uspješno obrisane.");
+        }
+        else
+        {
+            Console.WriteLine("Brisanje je otkazano.");
+        }
     }
 }
 
@@ -932,5 +1052,501 @@ void EditLoan()
     else
     {
         Console.WriteLine("Ništa onda, ostalo je sve po starom.");
+    }
+}
+void ShowLoans()
+{
+    while (true)
+    {
+        Console.Clear();
+        Console.WriteLine("PREGLED SVIH POSUDBI\n");
+        Console.WriteLine("1 - Sve posudbe redom kako su spremljene");
+        Console.WriteLine("2 - Sve posudbe sortirane po datumu posudbe");
+        Console.WriteLine("3 - Sve posudbe sortirane po zakasnini");
+        Console.WriteLine("4 - Sve trenutno nevraćene posudbe");
+        Console.WriteLine("5 - Pretraga posudbi po dijelu naslova ili autora");
+        Console.WriteLine("6 - Posudbe grupirane po mjesecu posudbe");
+        Console.WriteLine("0 - Povratak\n");
+
+        int choice = ReadMenuChoice(0, 6);
+        if (choice == 0)
+        {
+            return;
+        }
+
+        List<int> allMemberIds = new List<int>();
+        List<int> allLoanIds = new List<int>();
+
+        foreach (var mEntry in members)
+        {
+            foreach (var lEntry in mEntry.Value.Loans)
+            {
+                allMemberIds.Add(mEntry.Key);
+                allLoanIds.Add(lEntry.Key);
+            }
+        }
+
+        Console.Clear();
+
+        if (allLoanIds.Count == 0)
+        {
+            Console.WriteLine("Nema upisanih posudbi.");
+            WaitForContinue();
+            continue;
+        }
+
+        if (choice == 1)
+        {
+            Console.WriteLine("SVE POSUDBE\n");
+
+            for (int i = 0; i < allLoanIds.Count - 1; i++)
+            {
+                for (int j = i + 1; j < allLoanIds.Count; j++)
+                {
+                    if (allLoanIds[i] > allLoanIds[j])
+                    {
+                        int tempLoan = allLoanIds[i];
+                        allLoanIds[i] = allLoanIds[j];
+                        allLoanIds[j] = tempLoan;
+
+                        int tempMember = allMemberIds[i];
+                        allMemberIds[i] = allMemberIds[j];
+                        allMemberIds[j] = tempMember;
+                    }
+                }
+            }
+
+            for (int k = 0; k < allLoanIds.Count; k++)
+            {
+                int mId = allMemberIds[k];
+                int lId = allLoanIds[k];
+                var loan = members[mId].Loans[lId];
+
+                string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+                string returnText = "nije vraćeno";
+                if (loan.ReturnDate.HasValue)
+                {
+                    returnText = loan.ReturnDate.Value.ToString("yyyy-MM-dd");
+                }
+                string feeText = loan.LateFee.ToString("0.00");
+
+                Console.WriteLine($"[{lId}] \"{loan.Title}\" - {loan.Author} | posuđeno: {loanDateText} | vraćeno: {returnText} | kašnjenje: {loan.LateDays} dana | zakasnina: {feeText} €");
+            }
+        }
+        else if (choice == 2)
+        {
+            Console.WriteLine("SORTIRANJE PO DATUMU POSUDBE\n");
+            Console.WriteLine("1 - Uzlazno (od najstarijih)");
+            Console.WriteLine("2 - Silazno (od najnovijih)\n");
+            int order = ReadMenuChoice(1, 2);
+
+            for (int i = 0; i < allLoanIds.Count - 1; i++)
+            {
+                for (int j = i + 1; j < allLoanIds.Count; j++)
+                {
+                    DateTime date1 = members[allMemberIds[i]].Loans[allLoanIds[i]].LoanDate;
+                    DateTime date2 = members[allMemberIds[j]].Loans[allLoanIds[j]].LoanDate;
+
+                    bool shouldSwap = false;
+                    if (order == 1 && date1 > date2)
+                    {
+                        shouldSwap = true;
+                    }
+                    else if (order == 2 && date1 < date2)
+                    {
+                        shouldSwap = true;
+                    }
+
+                    if (shouldSwap)
+                    {
+                        int tempLoan = allLoanIds[i];
+                        allLoanIds[i] = allLoanIds[j];
+                        allLoanIds[j] = tempLoan;
+
+                        int tempMember = allMemberIds[i];
+                        allMemberIds[i] = allMemberIds[j];
+                        allMemberIds[j] = tempMember;
+                    }
+                }
+            }
+
+            Console.WriteLine();
+            for (int k = 0; k < allLoanIds.Count; k++)
+            {
+                int mId = allMemberIds[k];
+                int lId = allLoanIds[k];
+                var loan = members[mId].Loans[lId];
+
+                string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+                string returnText = "nije vraćeno";
+                if (loan.ReturnDate.HasValue)
+                {
+                    returnText = loan.ReturnDate.Value.ToString("yyyy-MM-dd");
+                }
+                string feeText = loan.LateFee.ToString("0.00");
+
+                Console.WriteLine($"[{lId}] \"{loan.Title}\" - {loan.Author} | posuđeno: {loanDateText} | vraćeno: {returnText} | kašnjenje: {loan.LateDays} dana | zakasnina: {feeText} €");
+            }
+        }
+        else if (choice == 3)
+        {
+            Console.WriteLine("SORTIRANJE PO ZAKASNINI\n");
+            Console.WriteLine("1 - Uzlazno (od najmanje)");
+            Console.WriteLine("2 - Silazno (od najveće)\n");
+            int order = ReadMenuChoice(1, 2);
+
+            for (int i = 0; i < allLoanIds.Count - 1; i++)
+            {
+                for (int j = i + 1; j < allLoanIds.Count; j++)
+                {
+                    decimal fee1 = members[allMemberIds[i]].Loans[allLoanIds[i]].LateFee;
+                    decimal fee2 = members[allMemberIds[j]].Loans[allLoanIds[j]].LateFee;
+
+                    bool shouldSwap = false;
+                    if (order == 1 && fee1 > fee2)
+                    {
+                        shouldSwap = true;
+                    }
+                    else if (order == 2 && fee1 < fee2)
+                    {
+                        shouldSwap = true;
+                    }
+
+                    if (shouldSwap)
+                    {
+                        int tempLoan = allLoanIds[i];
+                        allLoanIds[i] = allLoanIds[j];
+                        allLoanIds[j] = tempLoan;
+
+                        int tempMember = allMemberIds[i];
+                        allMemberIds[i] = allMemberIds[j];
+                        allMemberIds[j] = tempMember;
+                    }
+                }
+            }
+
+            Console.WriteLine();
+            for (int k = 0; k < allLoanIds.Count; k++)
+            {
+                int mId = allMemberIds[k];
+                int lId = allLoanIds[k];
+                var loan = members[mId].Loans[lId];
+
+                string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+                string returnText = "nije vraćeno";
+                if (loan.ReturnDate.HasValue)
+                {
+                    returnText = loan.ReturnDate.Value.ToString("yyyy-MM-dd");
+                }
+                string feeText = loan.LateFee.ToString("0.00");
+
+                Console.WriteLine($"[{lId}] \"{loan.Title}\" - {loan.Author} | posuđeno: {loanDateText} | vraćeno: {returnText} | kašnjenje: {loan.LateDays} dana | zakasnina: {feeText} €");
+            }
+        }
+        else if (choice == 4)
+        {
+            Console.WriteLine("TRENUTNO NEVRAĆENE POSUDBE\n");
+            bool found = false;
+
+            for (int k = 0; k < allLoanIds.Count; k++)
+            {
+                int mId = allMemberIds[k];
+                int lId = allLoanIds[k];
+                var loan = members[mId].Loans[lId];
+
+                if (!IsReturned(loan.ReturnDate))
+                {
+                    var m = members[mId];
+                    string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+                    string feeText = loan.LateFee.ToString("0.00");
+
+                    Console.WriteLine($"[{lId}] \"{loan.Title}\" - {loan.Author} | Član: {m.FirstName} {m.LastName} | posuđeno: {loanDateText} | kašnjenje: {loan.LateDays} dana | zakasnina: {feeText} €");
+                    found = true;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine("Nema nevraćenih posudbi.");
+            }
+        }
+        else if (choice == 5)
+        {
+            Console.WriteLine("PRETRAGA POSUDBI\n");
+            string search = ReadText("Unesite dio naslova ili autora: ").ToLower();
+            Console.WriteLine();
+
+            bool found = false;
+            for (int k = 0; k < allLoanIds.Count; k++)
+            {
+                int mId = allMemberIds[k];
+                int lId = allLoanIds[k];
+                var loan = members[mId].Loans[lId];
+
+                if (loan.Title.ToLower().Contains(search) || loan.Author.ToLower().Contains(search))
+                {
+                    string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+                    string returnText = "nije vraćeno";
+                    if (loan.ReturnDate.HasValue)
+                    {
+                        returnText = loan.ReturnDate.Value.ToString("yyyy-MM-dd");
+                    }
+                    string feeText = loan.LateFee.ToString("0.00");
+
+                    Console.WriteLine($"[{lId}] \"{loan.Title}\" - {loan.Author} | posuđeno: {loanDateText} | vraćeno: {returnText} | kašnjenje: {loan.LateDays} dana | zakasnina: {feeText} €");
+                    found = true;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine("Nije pronađena nijedna posudba.");
+            }
+        }
+        else if (choice == 6)
+        {
+            Console.WriteLine("POSUDBE GRUPIRANE PO MJESECU\n");
+
+            List<string> months = new List<string>();
+            for (int k = 0; k < allLoanIds.Count; k++)
+            {
+                var l = members[allMemberIds[k]].Loans[allLoanIds[k]];
+                string monthKey = l.LoanDate.ToString("yyyy-MM");
+                if (!months.Contains(monthKey))
+                {
+                    months.Add(monthKey);
+                }
+            }
+
+            for (int i = 0; i < months.Count - 1; i++)
+            {
+                for (int j = i + 1; j < months.Count; j++)
+                {
+                    if (string.Compare(months[i], months[j]) > 0)
+                    {
+                        string tempMonth = months[i];
+                        months[i] = months[j];
+                        months[j] = tempMonth;
+                    }
+                }
+            }
+
+            for (int mIndex = 0; mIndex < months.Count; mIndex++)
+            {
+                string currentMonth = months[mIndex];
+                int monthCount = 0;
+                decimal monthFee = 0;
+
+                Console.WriteLine($"--- {currentMonth} ---");
+
+                for (int k = 0; k < allLoanIds.Count; k++)
+                {
+                    int mId = allMemberIds[k];
+                    int lId = allLoanIds[k];
+                    var loan = members[mId].Loans[lId];
+
+                    if (loan.LoanDate.ToString("yyyy-MM") == currentMonth)
+                    {
+                        monthCount++;
+                        monthFee = monthFee + loan.LateFee;
+
+                        string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+                        string returnText = "nije vraćeno";
+                        if (loan.ReturnDate.HasValue)
+                        {
+                            returnText = loan.ReturnDate.Value.ToString("yyyy-MM-dd");
+                        }
+                        string feeText = loan.LateFee.ToString("0.00");
+
+                        Console.WriteLine($"[{lId}] \"{loan.Title}\" - {loan.Author} | posuđeno: {loanDateText} | vraćeno: {returnText} | kašnjenje: {loan.LateDays} dana | zakasnina: {feeText} €");
+                    }
+                }
+
+                string totalMonthFeeText = monthFee.ToString("0.00");
+                Console.WriteLine($"Broj posudbi: {monthCount} | Ukupna zakasnina: {totalMonthFeeText} €\n");
+            }
+        }
+
+        WaitForContinue();
+    }
+}
+
+void ShowReports()
+{
+    Console.Clear();
+    Console.WriteLine("IZVJEŠTAJI I ANALIZE\n");
+
+    if (members.Count == 0)
+    {
+        Console.WriteLine("Nema upisanih članova.");
+        WaitForContinue();
+        return;
+    }
+
+    PrintSimpleMembersList();
+    Console.Write("\nUnesite ID člana za izvještaj: ");
+    string? input = Console.ReadLine();
+
+    if (!int.TryParse(input, out int memberId) || !members.ContainsKey(memberId))
+    {
+        Console.WriteLine("Član s tim ID-om ne postoji.");
+        WaitForContinue();
+        return;
+    }
+
+    var member = members[memberId];
+
+    while (true)
+    {
+        Console.Clear();
+        Console.WriteLine($"IZVJEŠTAJI ZA ČLANA: {member.FirstName} {member.LastName}\n");
+        Console.WriteLine("1 - Ukupan broj posudbi i broj trenutno nevraćenih knjiga");
+        Console.WriteLine("2 - Ukupna zakasnina");
+        Console.WriteLine("3 - Prosječno trajanje posudbe u danima");
+        Console.WriteLine("4 - Posudba s najvećim kašnjenjem");
+        Console.WriteLine("5 - Pregled posudbi u rasponu datuma (od - do)");
+        Console.WriteLine("0 - Povratak\n");
+
+        int choice = ReadMenuChoice(0, 5);
+        if (choice == 0)
+        {
+            return;
+        }
+
+        Console.Clear();
+
+        if (choice == 1)
+        {
+            int totalLoans = 0;
+            int activeLoans = 0;
+
+            foreach (var loan in member.Loans.Values)
+            {
+                totalLoans++;
+                if (!IsReturned(loan.ReturnDate))
+                {
+                    activeLoans++;
+                }
+            }
+
+            Console.WriteLine($"Ukupan broj posudbi: {totalLoans}");
+            Console.WriteLine($"Broj trenutno nevraćenih knjiga: {activeLoans}");
+        }
+        else if (choice == 2)
+        {
+            decimal totalFee = 0;
+            foreach (var loan in member.Loans.Values)
+            {
+                totalFee = totalFee + loan.LateFee;
+            }
+
+            string totalFeeText = totalFee.ToString("0.00");
+            Console.WriteLine($"Ukupna zakasnina člana: {totalFeeText} €");
+        }
+        else if (choice == 3)
+        {
+            int totalDays = 0;
+            int returnedCount = 0;
+
+            foreach (var loan in member.Loans.Values)
+            {
+                if (IsReturned(loan.ReturnDate))
+                {
+                    int days = (loan.ReturnDate.Value.Date - loan.LoanDate.Date).Days;
+                    totalDays = totalDays + days;
+                    returnedCount++;
+                }
+            }
+
+            if (returnedCount == 0)
+            {
+                Console.WriteLine("Član nema vraćenih posudbi pa se prosjek ne može izračunati.");
+            }
+            else
+            {
+                double average = (double)totalDays / returnedCount;
+                string avgText = average.ToString("0.00");
+                Console.WriteLine($"Prosječno trajanje posudbe: {avgText} dana");
+            }
+        }
+        else if (choice == 4)
+        {
+            if (member.Loans.Count == 0)
+            {
+                Console.WriteLine("Član nema nijednu posudbu.");
+            }
+            else
+            {
+                int maxLoanId = -1;
+                int maxLateDays = -1;
+
+                foreach (var loanEntry in member.Loans)
+                {
+                    if (loanEntry.Value.LateDays > maxLateDays)
+                    {
+                        maxLateDays = loanEntry.Value.LateDays;
+                        maxLoanId = loanEntry.Key;
+                    }
+                }
+
+                if (maxLateDays <= 0)
+                {
+                    Console.WriteLine("Član nema nijednu posudbu s kašnjenjem.");
+                }
+                else
+                {
+                    var maxLoan = member.Loans[maxLoanId];
+                    string loanDateText = maxLoan.LoanDate.ToString("yyyy-MM-dd");
+                    string returnText = "nije vraćeno";
+                    if (maxLoan.ReturnDate.HasValue)
+                    {
+                        returnText = maxLoan.ReturnDate.Value.ToString("yyyy-MM-dd");
+                    }
+                    string feeText = maxLoan.LateFee.ToString("0.00");
+
+                    Console.WriteLine("Posudba s najvećim kašnjenjem:");
+                    Console.WriteLine($"[{maxLoanId}] \"{maxLoan.Title}\" - {maxLoan.Author} | posuđeno: {loanDateText} | vraćeno: {returnText} | kašnjenje: {maxLoan.LateDays} dana | zakasnina: {feeText} €");
+                }
+            }
+        }
+        else if (choice == 5)
+        {
+            DateTime dateFrom = ReadDate("Datum od (YYYY-MM-DD): ");
+            DateTime dateTo = ReadDate("Datum do (YYYY-MM-DD): ");
+
+            while (dateTo < dateFrom)
+            {
+                Console.WriteLine("Krajnji datum ne može biti prije početnog datuma!");
+                dateTo = ReadDate("Datum do (YYYY-MM-DD): ");
+            }
+
+            Console.WriteLine();
+            bool found = false;
+
+            foreach (var loanEntry in member.Loans)
+            {
+                var loan = loanEntry.Value;
+                if (loan.LoanDate.Date >= dateFrom.Date && loan.LoanDate.Date <= dateTo.Date)
+                {
+                    string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+                    string returnText = "nije vraćeno";
+                    if (loan.ReturnDate.HasValue)
+                    {
+                        returnText = loan.ReturnDate.Value.ToString("yyyy-MM-dd");
+                    }
+                    string feeText = loan.LateFee.ToString("0.00");
+
+                    Console.WriteLine($"[{loanEntry.Key}] \"{loan.Title}\" - {loan.Author} | posuđeno: {loanDateText} | vraćeno: {returnText} | kašnjenje: {loan.LateDays} dana | zakasnina: {feeText} €");
+                    found = true;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine("Nema posudbi u odabranom rasponu datuma.");
+            }
+        }
+
+        WaitForContinue();
     }
 }
