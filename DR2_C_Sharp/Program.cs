@@ -28,8 +28,7 @@ void RunMainMenu()
         switch (choice)
         {
             case 1:
-                Console.WriteLine("Članovi - skužajte nije dodano.");
-                WaitForContinue();
+                RunMembersMenu();
                 break;
             case 2:
                 Console.WriteLine("Posudbe - skužajte još nije dodano.");
@@ -120,4 +119,164 @@ int CalculateLateDays(DateTime loanDate, DateTime? returnDate)
 decimal CalculateLateFee(int lateDays)
 {
     return lateDays * DailyLateFee;
+}
+void RunMembersMenu()
+{
+    while (true)
+    {
+        Console.Clear();
+        Console.WriteLine("ČLANOVI\n");
+        Console.WriteLine("1 - Unos novog člana");
+        Console.WriteLine("2 - Brisanje člana");
+        Console.WriteLine("3 - Uređivanje člana");
+        Console.WriteLine("4 - Pregled svih članova");
+        Console.WriteLine("0 - Povratak na glavni izbornik\n");
+
+        int choice = ReadMenuChoice(0, 4);
+
+        switch (choice)
+        {
+            case 1:
+                Console.WriteLine("Unos člana - scusi još nije dodano.");
+                WaitForContinue();
+                break;
+            case 2:
+                Console.WriteLine("Brisanje člana - scusi još nije dodano.");
+                WaitForContinue();
+                break;
+            case 3:
+                Console.WriteLine("Uređivanje člana - scusi još nije dodano.");
+                WaitForContinue();
+                break;
+            case 4:
+                ShowMembers();
+                break;
+            case 0:
+                return;
+        }
+    }
+}
+
+void ShowMembers()
+{
+    while (true)
+    {
+        Console.Clear();
+        Console.WriteLine("PREGLED ČLANOVA\n");
+        Console.WriteLine("1 - Svi članovi abecedno po prezimenu");
+        Console.WriteLine("2 - Članovi mlađi od 18 godina");
+        Console.WriteLine("3 - Članovi s barem jednom nevraćenom knjigom");
+        Console.WriteLine("0 - Povratak\n");
+
+        int choice = ReadMenuChoice(0, 3);
+
+        if (choice == 0)
+        {
+            return;
+        }
+
+        Console.Clear();
+
+        if (choice == 1)
+        {
+            List<int> ids = GetSortedMemberIds();
+            foreach (int id in ids)
+            {
+                var m = members[id];
+                Console.WriteLine($"[{id}] {m.LastName}, {m.FirstName} ({CalculateAge(m.BirthDate)}) - broj posudbi: {m.Loans.Count}");
+            }
+        }
+        else if (choice == 2)
+        {
+            bool found = false;
+            foreach (var item in members)
+            {
+                int age = CalculateAge(item.Value.BirthDate);
+                if (age < AdultAge)
+                {
+                    Console.WriteLine($"[{item.Key}] {item.Value.LastName}, {item.Value.FirstName} ({age}) - broj posudbi: {item.Value.Loans.Count}");
+                    found = true;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine("Nema maloljetnih članova.");
+            }
+        }
+        else if (choice == 3)
+        {
+            bool found = false;
+            foreach (var item in members)
+            {
+                if (HasActiveLoans(item.Key))
+                {
+                    int age = CalculateAge(item.Value.BirthDate);
+                    Console.WriteLine($"[{item.Key}] {item.Value.LastName}, {item.Value.FirstName} ({age}) - broj posudbi: {item.Value.Loans.Count}");
+                    found = true;
+                }
+            }
+
+            if (!found)
+            {
+                Console.WriteLine("Nema članova s nevraćenim knjigama.");
+            }
+        }
+
+        WaitForContinue();
+    }
+}
+
+List<int> GetSortedMemberIds()
+{
+    List<int> ids = new List<int>(members.Keys);
+
+    for (int i = 0; i < ids.Count - 1; i++)
+    {
+        for (int j = i + 1; j < ids.Count; j++)
+        {
+            string last1 = members[ids[i]].LastName;
+            string last2 = members[ids[j]].LastName;
+
+            if (string.Compare(last1, last2, true) > 0)
+            {
+                int temp = ids[i];
+                ids[i] = ids[j];
+                ids[j] = temp;
+            }
+        }
+    }
+
+    return ids;
+}
+
+int CalculateAge(DateTime birthDate)
+{
+    DateTime today = DateTime.Today;
+    int age = today.Year - birthDate.Year;
+
+    if (today.Month < birthDate.Month || (today.Month == birthDate.Month && today.Day < birthDate.Day))
+    {
+        age--;
+    }
+
+    return age;
+}
+
+bool IsReturned(DateTime? returnDate)
+{
+    return returnDate.HasValue;
+}
+
+bool HasActiveLoans(int memberId)
+{
+    foreach (var loan in members[memberId].Loans.Values)
+    {
+        if (!IsReturned(loan.ReturnDate))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
