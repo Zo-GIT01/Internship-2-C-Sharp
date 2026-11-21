@@ -602,11 +602,11 @@ void RunLoansMenu()
                 WaitForContinue();
                 break;
             case 3:
-                Console.WriteLine("Brisanje posudbe - još nije dodano.");
+                DeleteLoan();
                 WaitForContinue();
                 break;
             case 4:
-                Console.WriteLine("Uređivanje posudbe - još nije dodano.");
+                EditLoan();
                 WaitForContinue();
                 break;
             case 5:
@@ -739,4 +739,198 @@ void ReturnBook()
     Console.WriteLine("\nKnjiga je uspješno vraćena!");
     Console.WriteLine($"Dani kašnjenja: {lateDays}");
     Console.WriteLine($"Zakasnina: {feeText} €");
+}
+bool PrintSimpleLoansList()
+{
+    bool hasAny = false;
+    foreach (var memberEntry in members)
+    {
+        foreach (var loanEntry in memberEntry.Value.Loans)
+        {
+            if (!hasAny)
+            {
+                Console.WriteLine("Popis posudbi:");
+                hasAny = true;
+            }
+
+            var loan = loanEntry.Value;
+            string loanDateText = loan.LoanDate.ToString("yyyy-MM-dd");
+            string returnText = "nije vraćeno";
+            if (loan.ReturnDate.HasValue)
+            {
+                returnText = loan.ReturnDate.Value.ToString("yyyy-MM-dd");
+            }
+
+            Console.WriteLine($"[{loanEntry.Key}] {loan.Title} - {loan.Author} | Član: {memberEntry.Value.FirstName} {memberEntry.Value.LastName} | Posuđeno: {loanDateText} | Vraćeno: {returnText}");
+        }
+    }
+
+    return hasAny;
+}
+
+void DeleteLoan()
+{
+    Console.Clear();
+    Console.WriteLine("BRISANJE POSUDBE\n");
+
+    if (!PrintSimpleLoansList())
+    {
+        Console.WriteLine("Nema nijedne posudbe, sve je prazno.");
+        return;
+    }
+
+    Console.Write("\nUpiši ID posudbe za brisanje: ");
+    string? input = Console.ReadLine();
+
+    if (!int.TryParse(input, out int loanId))
+    {
+        Console.WriteLine("Krivi ID, aj lipo broj unesi.");
+        return;
+    }
+
+    int foundMemberId = -1;
+    foreach (var memberEntry in members)
+    {
+        if (memberEntry.Value.Loans.ContainsKey(loanId))
+        {
+            foundMemberId = memberEntry.Key;
+            break;
+        }
+    }
+
+    if (foundMemberId == -1)
+    {
+        Console.WriteLine("Nema posudbe s tim ID-om, krivo si.");
+        return;
+    }
+
+    var loan = members[foundMemberId].Loans[loanId];
+    if (AskConfirmation($"\nJesi siguran da želiš izbrisat '{loan.Title}'? (da/ne): "))
+    {
+        members[foundMemberId].Loans.Remove(loanId);
+        Console.WriteLine("Obrisano, nema je više.");
+    }
+    else
+    {
+        Console.WriteLine("Ništa onda");
+    }
+}
+
+void EditLoan()
+{
+    Console.Clear();
+    Console.WriteLine("UREĐIVANJE POSUDBE\n");
+
+    if (!PrintSimpleLoansList())
+    {
+        Console.WriteLine("Nema nijedne posudbe, ne može se uređivati.");
+        return;
+    }
+
+    Console.Write("\nUpiši ID posudbe koju ćeš uređivati: ");
+    string? input = Console.ReadLine();
+
+    if (!int.TryParse(input, out int loanId))
+    {
+        Console.WriteLine("Krivi ID, aj lipo broj unesi.");
+        return;
+    }
+
+    int foundMemberId = -1;
+    foreach (var memberEntry in members)
+    {
+        if (memberEntry.Value.Loans.ContainsKey(loanId))
+        {
+            foundMemberId = memberEntry.Key;
+            break;
+        }
+    }
+
+    if (foundMemberId == -1)
+    {
+        Console.WriteLine("Nema posudbe s tim ID-om, krivo si.");
+        return;
+    }
+
+    var current = members[foundMemberId].Loans[loanId];
+    Console.WriteLine("\nSamo stisni Enter ako nećeš mjenjati polje.\n");
+
+    Console.Write($"Naslov ({current.Title}): ");
+    string? newTitle = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(newTitle))
+    {
+        newTitle = current.Title;
+    }
+    else
+    {
+        newTitle = newTitle.Trim();
+    }
+
+    Console.Write($"Autor ({current.Author}): ");
+    string? newAuthor = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(newAuthor))
+    {
+        newAuthor = current.Author;
+    }
+    else
+    {
+        newAuthor = newAuthor.Trim();
+    }
+
+    DateTime newLoanDate = current.LoanDate;
+    string currentLoanText = current.LoanDate.ToString("yyyy-MM-dd");
+    if (AskConfirmation($"Želiš li mjenjati datum posudbe ({currentLoanText})? (da/ne): "))
+    {
+        newLoanDate = ReadDate("Novi datum posudbe (YYYY-MM-DD): ");
+        while (newLoanDate > DateTime.Today)
+        {
+            Console.WriteLine("Ne može datum posudbe bit u budućnosti!");
+            newLoanDate = ReadDate("Novi datum posudbe (YYYY-MM-DD): ");
+        }
+    }
+
+    DateTime? newReturnDate = current.ReturnDate;
+    string currentReturnText = "nije vraćeno";
+    if (current.ReturnDate.HasValue)
+    {
+        currentReturnText = current.ReturnDate.Value.ToString("yyyy-MM-dd");
+    }
+
+    bool mustChangeReturn = false;
+    if (newReturnDate.HasValue && newReturnDate.Value < newLoanDate)
+    {
+        Console.WriteLine("Stari datum vraćanja ti je sad prije novog datuma posudbe, mora se mjenjati.");
+        mustChangeReturn = true;
+    }
+
+    if (mustChangeReturn || AskConfirmation($"Želiš li mjenjati datum vraćnja ({currentReturnText})? (da/ne): "))
+    {
+        if (AskConfirmation("Je li knjiga vraćena? (da/ne): "))
+        {
+            DateTime tempReturn = ReadDate("Datum vraćanja (YYYY-MM-DD): ");
+            while (tempReturn < newLoanDate || tempReturn > DateTime.Today)
+            {
+                Console.WriteLine("Ne može datum vraćanja bit prije posudbe ni u budućnosti!");
+                tempReturn = ReadDate("Datum vraćanja (YYYY-MM-DD): ");
+            }
+            newReturnDate = tempReturn;
+        }
+        else
+        {
+            newReturnDate = null;
+        }
+    }
+
+    int newLateDays = CalculateLateDays(newLoanDate, newReturnDate);
+    decimal newLateFee = CalculateLateFee(newLateDays);
+
+    if (AskConfirmation("\n Želiš li spremiti ove promjene? (da/ne): "))
+    {
+        members[foundMemberId].Loans[loanId] = (newTitle, newAuthor, newLoanDate, newReturnDate, newLateDays, newLateFee);
+        Console.WriteLine("Spremljeno i updateano.");
+    }
+    else
+    {
+        Console.WriteLine("Ništa onda, ostalo je sve po starom.");
+    }
 }
