@@ -122,7 +122,8 @@ decimal CalculateLateFee(int lateDays)
 }
 void RunMembersMenu()
 {
-    while (true)
+   
+        while (true)
     {
         Console.Clear();
         Console.WriteLine("ČLANOVI\n");
@@ -137,7 +138,7 @@ void RunMembersMenu()
         switch (choice)
         {
             case 1:
-                Console.WriteLine("Unos člana - scusi još nije dodano.");
+                AddMember();
                 WaitForContinue();
                 break;
             case 2:
@@ -279,4 +280,68 @@ bool HasActiveLoans(int memberId)
     }
 
     return false;
+}
+
+void AddMember()
+{
+    Console.Clear();
+    Console.WriteLine("UNOS NOVOG ČLANA\n");
+
+    string firstName = ReadText("Ime: ");
+    string lastName = ReadText("Prezime: ");
+
+    DateTime birthDate = ReadDate("Datum rođenja (YYYY-MM-DD): ");
+    while (birthDate > DateTime.Today)
+    {
+        Console.WriteLine("Datum rođenja ne može biti u budućnosti!");
+        birthDate = ReadDate("Datum rođenja (YYYY-MM-DD): ");
+    }
+
+    int id = nextMemberId;
+    nextMemberId++;
+
+    var loans = new Dictionary<int, (string Title, string Author, DateTime LoanDate, DateTime? ReturnDate, int LateDays, decimal LateFee)>();
+    members[id] = (firstName, lastName, birthDate, loans);
+
+    Console.WriteLine($"\nČlan uspješno dodan! ID člana je: {id}");
+}
+
+string ReadText(string message)
+{
+    while (true)
+    {
+        Console.Write(message);
+        string? input = Console.ReadLine();
+
+        if (!string.IsNullOrWhiteSpace(input))
+        {
+            return input.Trim();
+        }
+
+        Console.WriteLine(" Ej! Šta je s glavon!? Polje ne smije biti prazno!");
+    }
+}
+
+DateTime ReadDate(string message)
+{
+    while (true)
+    {
+        Console.Write(message);
+        string? input = Console.ReadLine();
+
+        if (input != null && input.Length == 10 && input[4] == '-' && input[7] == '-')
+        {
+            string[] parts = input.Split('-');
+            bool okYear = int.TryParse(parts[0], out int year);
+            bool okMonth = int.TryParse(parts[1], out int month);
+            bool okDay = int.TryParse(parts[2], out int day);
+
+            if (okYear && okMonth && okDay && year >= 1900 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= DateTime.DaysInMonth(year, month))
+            {
+                return new DateTime(year, month, day);
+            }
+        }
+
+        Console.WriteLine("Krivi format datuma! Sredi glavu i unesi lipo kao YYYY-MM-DD (npr. 2002-05-14).");
+    }
 }
